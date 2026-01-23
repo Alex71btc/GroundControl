@@ -9,6 +9,7 @@
     "vitest": "^1.0.0"
   },
   "dependencies": {
+    "@types/node-fetch": "^2.6.13",
     "bitcoinjs-message": "^2.2.0",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
@@ -21,7 +22,7 @@
     "jayson": "^3.6.6",
     "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.9.8",
-    "node-fetch": "^3.3.2",
+    "node-fetch": "^2.7.0",
     "reflect-metadata": "^0.1.10",
     "ts-node": "10.9.1",
     "typeorm": "0.3.14",
