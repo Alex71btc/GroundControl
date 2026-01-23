@@ -15,11 +15,9 @@ if (!process.env.APNS_P8 || !process.env.APPLE_TEAM_ID || !process.env.APNS_P8_K
   process.exit();
 }
 
-const keyFileStr = Buffer.from(process.env.GOOGLE_KEY_FILE, "hex").toString("ascii");
-require("fs").writeFileSync("/tmp/google_key_file.json", keyFileStr, { encoding: "ascii" });
 const auth = new GoogleAuth({
-  keyFile: "/tmp/google_key_file.json",
-  scopes: "https://www.googleapis.com/auth/cloud-platform",
+  keyFile: process.env.GOOGLE_KEY_FILE,
+  scopes: ["https://www.googleapis.com/auth/firebase.messaging"],
 });
 
 /**
@@ -84,8 +82,8 @@ export class GroundControlToMajorTom {
           tag: pushNotification.txid,
         },
         notification: {
-          title: "New unconfirmed transaction",
-          body: "You received new transfer on " + StringUtils.shortenAddress(pushNotification.address),
+          title: "New unconfirmed transaction✅(MY SERVER)",
+          body: "You received new transfer on (MY SERVER)" + StringUtils.shortenAddress(pushNotification.address),
         },
       },
     };
@@ -94,8 +92,8 @@ export class GroundControlToMajorTom {
       aps: {
         badge: pushNotification.badge,
         alert: {
-          title: "New Transaction - Pending",
-          body: "Received transaction on " + StringUtils.shortenAddress(pushNotification.address),
+          title: "New Transaction - Pending✅ (MY SERVER)",
+          body: "Received transaction on (MY SERVER)" + StringUtils.shortenAddress(pushNotification.address),
         },
         sound: "default",
       },
@@ -114,8 +112,8 @@ export class GroundControlToMajorTom {
           tag: pushNotification.txid,
         },
         notification: {
-          title: "Transaction - Confirmed",
-          body: "Your transaction " + StringUtils.shortenTxid(pushNotification.txid) + " has been confirmed",
+          title: "Transaction - ✅ CONFIRMED (MY SERVER)",
+          body: "Your transaction (MY SERVER)" + StringUtils.shortenTxid(pushNotification.txid) + " has been confirmed",
         },
       },
     };
@@ -124,8 +122,8 @@ export class GroundControlToMajorTom {
       aps: {
         badge: pushNotification.badge,
         alert: {
-          title: "Transaction - Confirmed",
-          body: "Your transaction " + StringUtils.shortenTxid(pushNotification.txid) + " has been confirmed",
+          title: "Transaction - ✅ CONFIRMED (MY SERVER)",
+          body: "Your transaction (MY SERVER)" + StringUtils.shortenTxid(pushNotification.txid) + " has been confirmed",
         },
         sound: "default",
       },

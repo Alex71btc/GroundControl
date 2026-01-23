@@ -81,7 +81,9 @@ dataSource
       let unsubscribed = false;
 
       if (!tokenConfig.level_all) unsubscribed = true; // user unsubscribed from all
-      switch (payload.level) {
+        const googleCreds = await GroundControlToMajorTom.getGoogleCredentials();
+        const apnsJwt = payload.os === "ios" ? GroundControlToMajorTom.getApnsJwtToken() : "";
+        switch (payload.level) {
         case NOTIFICATION_LEVEL_TRANSACTIONS:
           if (!tokenConfig.level_transactions) unsubscribed = true;
           break;
@@ -109,31 +111,31 @@ dataSource
         case 2:
           payload = <components["schemas"]["PushNotificationOnchainAddressGotPaid"]>payload;
           process.env.VERBOSE && console.log("pushing to token", payload.token, payload.os);
-          await GroundControlToMajorTom.pushOnchainAddressWasPaid(connection, await GroundControlToMajorTom.getGoogleCredentials(), GroundControlToMajorTom.getApnsJwtToken(), payload);
+          await GroundControlToMajorTom.pushOnchainAddressWasPaid(connection, googleCreds, apnsJwt, payload);
           await sendQueueRepository.remove(record);
           break;
         case 3:
           payload = <components["schemas"]["PushNotificationOnchainAddressGotUnconfirmedTransaction"]>payload;
           process.env.VERBOSE && console.log("pushing to token", payload.token, payload.os);
-          await GroundControlToMajorTom.pushOnchainAddressGotUnconfirmedTransaction(connection, await GroundControlToMajorTom.getGoogleCredentials(), GroundControlToMajorTom.getApnsJwtToken(), payload);
+          await GroundControlToMajorTom.pushOnchainAddressGotUnconfirmedTransaction(connection, googleCreds, apnsJwt, payload);
           await sendQueueRepository.remove(record);
           break;
         case 1:
           payload = <components["schemas"]["PushNotificationLightningInvoicePaid"]>payload;
           process.env.VERBOSE && console.log("pushing to token", payload.token, payload.os);
-          await GroundControlToMajorTom.pushLightningInvoicePaid(connection, await GroundControlToMajorTom.getGoogleCredentials(), GroundControlToMajorTom.getApnsJwtToken(), payload);
+          await GroundControlToMajorTom.pushLightningInvoicePaid(connection, googleCreds, apnsJwt, payload);
           await sendQueueRepository.remove(record);
           break;
         case 4:
           payload = <components["schemas"]["PushNotificationTxidGotConfirmed"]>payload;
           process.env.VERBOSE && console.log("pushing to token", payload.token, payload.os);
-          await GroundControlToMajorTom.pushOnchainTxidGotConfirmed(connection, await GroundControlToMajorTom.getGoogleCredentials(), GroundControlToMajorTom.getApnsJwtToken(), payload);
+          await GroundControlToMajorTom.pushOnchainTxidGotConfirmed(connection, googleCreds, apnsJwt, payload);
           await sendQueueRepository.remove(record);
           break;
         case 5:
           payload = <components["schemas"]["PushNotificationMessage"]>payload;
           process.env.VERBOSE && console.log("pushing to token", payload.token, payload.os);
-          await GroundControlToMajorTom.pushMessage(connection, await GroundControlToMajorTom.getGoogleCredentials(), GroundControlToMajorTom.getApnsJwtToken(), payload);
+          await GroundControlToMajorTom.pushMessage(connection, googleCreds, apnsJwt, payload);
           await sendQueueRepository.remove(record);
           break;
         default:

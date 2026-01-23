@@ -9,15 +9,17 @@
     "vitest": "^1.0.0"
   },
   "dependencies": {
+    "bitcoinjs-message": "^2.2.0",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
     "dotenv": "^16.0.2",
     "express": "^4.21.1",
     "express-rate-limit": "^6.6.0",
+    "firebase-admin": "^13.6.0",
     "google-auth-library": "^9.15.0",
     "helmet": "^5.1.0",
     "jayson": "^3.6.6",
-    "jsonwebtoken": "^9.0.0",
+    "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.9.8",
     "node-fetch": "^3.3.2",
     "reflect-metadata": "^0.1.10",

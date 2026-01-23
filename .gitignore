@@ -5,3 +5,7 @@ build/
 tmp/
 temp/
 .env
+
+# local backups
+src/*.bak.*
+src/index.ts.bak.*
