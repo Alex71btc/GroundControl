@@ -9,3 +9,8 @@ temp/
 # local backups
 src/*.bak.*
 src/index.ts.bak.*
+.env
+backups/
+*.bak.*
+groundcontrol@*
+ts-node
