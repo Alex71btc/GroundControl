@@ -1,3 +1,4 @@
+import { fetch } from "undici";
 import { GoogleAuth } from "google-auth-library";
 import { DataSource } from "typeorm";
 import { PushLog } from "../entity/PushLog";
@@ -6,11 +7,18 @@ import { TokenToHash } from "../entity/TokenToHash";
 import { TokenToTxid } from "../entity/TokenToTxid";
 import { components } from "../openapi/api";
 import { StringUtils } from "../utils/stringUtils";
+
 const jwt = require("jsonwebtoken");
 const http2 = require("http2");
 require("dotenv").config();
 
-if (!process.env.APNS_P8 || !process.env.APPLE_TEAM_ID || !process.env.APNS_P8_KID || !process.env.GOOGLE_KEY_FILE || !process.env.GOOGLE_PROJECT_ID) {
+if (
+  !process.env.APNS_P8 ||
+  !process.env.APPLE_TEAM_ID ||
+  !process.env.APNS_P8_KID ||
+  !process.env.GOOGLE_KEY_FILE ||
+  !process.env.GOOGLE_PROJECT_ID
+) {
   console.error("not all env variables set");
   process.exit();
 }
@@ -21,16 +29,7 @@ const auth = new GoogleAuth({
 });
 
 /**
- * Since we cant attach any code to openapi schema definition, this is a repository of transforming pushnotification object
- * (thats created from apenapi schema) to actual payload thats gona be pushed to fcm/apns. In most basic case we would
- * need to only fill title/body according to user language.
- *
- * One method per each notification type.
- *
- * @see https://dev.to/jakubkoci/react-native-push-notifications-313i
- * @see https://developer.apple.com/documentation/usernotifications/setting_up_a_remote_notification_server/sending_notification_requests_to_apns
- * @see https://developer.apple.com/documentation/usernotifications/setting_up_a_remote_notification_server/generating_a_remote_notification
- * @see https://firebase.google.com/docs/cloud-messaging/http-server-ref
+ * Transforms pushnotification objects (openapi schema) into the actual payload sent to FCM/APNS.
  */
 export class GroundControlToMajorTom {
   protected static _jwtToken: string = "";
@@ -39,7 +38,7 @@ export class GroundControlToMajorTom {
   static async getGoogleCredentials() {
     const client = await auth.getClient();
     const accessTokenResponse = await client.getAccessToken();
-    return accessTokenResponse.token; // `accessTokenResponse.token` contains the short-lived access token
+    return accessTokenResponse.token;
   }
 
   static getApnsJwtToken(): string {
@@ -50,14 +49,14 @@ export class GroundControlToMajorTom {
     const key = Buffer.from(process.env.APNS_P8, "hex").toString("utf8");
     const jwtToken = jwt.sign(
       {
-        iss: process.env.APPLE_TEAM_ID, // "team ID" of your developer account
+        iss: process.env.APPLE_TEAM_ID,
         iat: Math.round(+new Date() / 1000),
       },
       key,
       {
         header: {
           alg: "ES256",
-          kid: process.env.APNS_P8_KID, // issuer key which is "key ID" of your p8 file
+          kid: process.env.APNS_P8_KID,
         },
       }
     );
@@ -68,12 +67,17 @@ export class GroundControlToMajorTom {
     return jwtToken;
   }
 
+  /**
+   * Unconfirmed incoming tx on an onchain address (mempool event).
+   */
   static async pushOnchainAddressGotUnconfirmedTransaction(
     dataSource: DataSource,
     serverKey: string,
     apnsP8: string,
     pushNotification: components["schemas"]["PushNotificationOnchainAddressGotUnconfirmedTransaction"]
   ): Promise<void> {
+    const shortAddr = StringUtils.shortenAddress(pushNotification.address);
+
     const fcmPayload = {
       message: {
         token: "",
@@ -82,61 +86,96 @@ export class GroundControlToMajorTom {
           tag: pushNotification.txid,
         },
         notification: {
-          title: "New unconfirmed transaction✅(MY SERVER)",
-          body: "You received new transfer on (MY SERVER)" + StringUtils.shortenAddress(pushNotification.address),
+          title: "New unconfirmed transaction",
+          body: "You received new transfer on " + shortAddr,
+        },
+        android: {
+          notification: {
+            // collapse unconfirmed updates for same txid
+          tag: pushNotification.txid,
+          },
         },
       },
     };
 
-    const apnsPayload = {
+    const apnsPayload: any = {
       aps: {
         badge: pushNotification.badge,
         alert: {
-          title: "New Transaction - Pending✅ (MY SERVER)",
-          body: "Received transaction on (MY SERVER)" + StringUtils.shortenAddress(pushNotification.address),
+          title: "New Transaction - Pending",
+          body: "Received transaction on " + shortAddr,
         },
         sound: "default",
       },
       data: {},
     };
 
-    if (pushNotification.os === "android") return GroundControlToMajorTom._pushToFcm(dataSource, serverKey, pushNotification.token, fcmPayload, pushNotification);
-    if (pushNotification.os === "ios") return GroundControlToMajorTom._pushToApns(dataSource, apnsP8, pushNotification.token, apnsPayload, pushNotification, pushNotification.txid);
+    if (pushNotification.os === "android")
+      return GroundControlToMajorTom._pushToFcm(dataSource, serverKey, pushNotification.token, fcmPayload, pushNotification);
+    if (pushNotification.os === "ios")
+      return GroundControlToMajorTom._pushToApns(dataSource, apnsP8, pushNotification.token, apnsPayload, pushNotification, String((pushNotification as any).txid));
   }
 
-  static async pushOnchainTxidGotConfirmed(dataSource: DataSource, serverKey: string, apnsP8: string, pushNotification: components["schemas"]["PushNotificationTxidGotConfirmed"]): Promise<void> {
+  /**
+   * Confirmed txid (block confirmation event).
+   */
+  static async pushOnchainTxidGotConfirmed(
+    dataSource: DataSource,
+    serverKey: string,
+    apnsP8: string,
+    pushNotification: components["schemas"]["PushNotificationTxidGotConfirmed"]
+  ): Promise<void> {
+    const shortTx = StringUtils.shortenTxid(pushNotification.txid);
+
     const fcmPayload = {
       message: {
+        token: "",
         data: {
           badge: String(pushNotification.badge),
           tag: pushNotification.txid,
         },
         notification: {
-          title: "Transaction - ✅ CONFIRMED (MY SERVER)",
-          body: "Your transaction (MY SERVER)" + StringUtils.shortenTxid(pushNotification.txid) + " has been confirmed",
+          title: "Transaction - Confirmed",
+          body: "Your transaction " + shortTx + " has been confirmed",
+        },
+        android: {
+          notification: {
+            tag: pushNotification.txid,
+          },
         },
       },
     };
 
-    const apnsPayload = {
+    const apnsPayload: any = {
       aps: {
         badge: pushNotification.badge,
         alert: {
-          title: "Transaction - ✅ CONFIRMED (MY SERVER)",
-          body: "Your transaction (MY SERVER)" + StringUtils.shortenTxid(pushNotification.txid) + " has been confirmed",
+          title: "Transaction - Confirmed",
+          body: "Your transaction " + shortTx + " has been confirmed",
         },
         sound: "default",
       },
       data: {},
     };
 
-    if (pushNotification.os === "android") return GroundControlToMajorTom._pushToFcm(dataSource, serverKey, pushNotification.token, fcmPayload, pushNotification);
-    if (pushNotification.os === "ios") return GroundControlToMajorTom._pushToApns(dataSource, apnsP8, pushNotification.token, apnsPayload, pushNotification, pushNotification.txid);
+    if (pushNotification.os === "android")
+      return GroundControlToMajorTom._pushToFcm(dataSource, serverKey, pushNotification.token, fcmPayload, pushNotification);
+    if (pushNotification.os === "ios")
+      return GroundControlToMajorTom._pushToApns(dataSource, apnsP8, pushNotification.token, apnsPayload, pushNotification, String((pushNotification as any).txid));
   }
 
-  static async pushMessage(dataSource: DataSource, serverKey: string, apnsP8: string, pushNotification: components["schemas"]["PushNotificationMessage"]): Promise<void> {
+  /**
+   * Generic message.
+   */
+  static async pushMessage(
+    dataSource: DataSource,
+    serverKey: string,
+    apnsP8: string,
+    pushNotification: components["schemas"]["PushNotificationMessage"]
+  ): Promise<void> {
     const fcmPayload = {
       message: {
+        token: "",
         data: {},
         notification: {
           title: "Message",
@@ -145,7 +184,7 @@ export class GroundControlToMajorTom {
       },
     };
 
-    const apnsPayload = {
+    const apnsPayload: any = {
       aps: {
         badge: pushNotification.badge,
         alert: {
@@ -157,11 +196,24 @@ export class GroundControlToMajorTom {
       data: {},
     };
 
-    if (pushNotification.os === "android") return GroundControlToMajorTom._pushToFcm(dataSource, serverKey, pushNotification.token, fcmPayload, pushNotification);
-    if (pushNotification.os === "ios") return GroundControlToMajorTom._pushToApns(dataSource, apnsP8, pushNotification.token, apnsPayload, pushNotification, pushNotification.txid);
+    if (pushNotification.os === "android")
+      return GroundControlToMajorTom._pushToFcm(dataSource, serverKey, pushNotification.token, fcmPayload, pushNotification);
+    if (pushNotification.os === "ios")
+      return GroundControlToMajorTom._pushToApns(dataSource, apnsP8, pushNotification.token, apnsPayload, pushNotification, String((pushNotification as any).txid));
   }
 
-  static async pushOnchainAddressWasPaid(dataSource: DataSource, serverKey: string, apnsP8: string, pushNotification: components["schemas"]["PushNotificationOnchainAddressGotPaid"]): Promise<void> {
+  /**
+   * Address was paid (usually after confirmation / blockprocessor or a specific event type).
+   * This is the nice "+X sats Received on ..." style.
+   */
+  static async pushOnchainAddressWasPaid(
+    dataSource: DataSource,
+    serverKey: string,
+    apnsP8: string,
+    pushNotification: components["schemas"]["PushNotificationOnchainAddressGotPaid"]
+  ): Promise<void> {
+    const shortAddr = StringUtils.shortenAddress(pushNotification.address);
+
     const fcmPayload = {
       message: {
         token: "",
@@ -171,66 +223,102 @@ export class GroundControlToMajorTom {
         },
         notification: {
           title: "+" + pushNotification.sat + " sats",
-          body: "Received on " + StringUtils.shortenAddress(pushNotification.address),
+          body: "Received on " + shortAddr,
+        },
+        android: {
+          notification: {
+            tag: pushNotification.txid,
+          },
         },
       },
     };
 
-    const apnsPayload = {
+    const apnsPayload: any = {
       aps: {
         badge: pushNotification.badge,
         alert: {
           title: "+" + pushNotification.sat + " sats",
-          body: "Received on " + StringUtils.shortenAddress(pushNotification.address),
+          body: "Received on " + shortAddr,
         },
         sound: "default",
       },
       data: {},
     };
 
-    if (pushNotification.os === "android") return GroundControlToMajorTom._pushToFcm(dataSource, serverKey, pushNotification.token, fcmPayload, pushNotification);
-    if (pushNotification.os === "ios") return GroundControlToMajorTom._pushToApns(dataSource, apnsP8, pushNotification.token, apnsPayload, pushNotification, pushNotification.txid);
+    if (pushNotification.os === "android")
+      return GroundControlToMajorTom._pushToFcm(dataSource, serverKey, pushNotification.token, fcmPayload, pushNotification);
+    if (pushNotification.os === "ios")
+return GroundControlToMajorTom._pushToApns(
+  dataSource,
+  apnsP8,
+  pushNotification.token,
+  apnsPayload,
+  pushNotification,
+  String((pushNotification as any).txid),
+);
+
   }
 
-  static async pushLightningInvoicePaid(dataSource: DataSource, serverKey: string, apnsP8: string, pushNotification: components["schemas"]["PushNotificationLightningInvoicePaid"]): Promise<void> {
+  static async pushLightningInvoicePaid(
+    dataSource: DataSource,
+    serverKey: string,
+    apnsP8: string,
+    pushNotification: components["schemas"]["PushNotificationLightningInvoicePaid"]
+  ): Promise<void> {
+    const title = "+" + pushNotification.sat + " sats";
+    const body = "Paid: " + (pushNotification.memo || "your invoice");
+
     const fcmPayload = {
       message: {
+        token: "",
         data: {
           badge: String(pushNotification.badge),
           tag: pushNotification.hash,
         },
         notification: {
-          body: "Paid: " + (pushNotification.memo || "your invoice"),
-          title: "+" + pushNotification.sat + " sats",
+          title,
+          body,
+        },
+        android: {
+          notification: {
+            tag: pushNotification.hash,
+          },
         },
       },
     };
 
-    const apnsPayload = {
+    const apnsPayload: any = {
       aps: {
         badge: pushNotification.badge,
-        alert: {
-          title: "+" + pushNotification.sat + " sats",
-          body: "Paid: " + (pushNotification.memo || "your invoice"),
-        },
+        alert: { title, body },
         sound: "default",
       },
       data: {},
     };
 
-    if (pushNotification.os === "android") return GroundControlToMajorTom._pushToFcm(dataSource, serverKey, pushNotification.token, fcmPayload, pushNotification);
-    if (pushNotification.os === "ios") return GroundControlToMajorTom._pushToApns(dataSource, apnsP8, pushNotification.token, apnsPayload, pushNotification, pushNotification.hash);
+    if (pushNotification.os === "android")
+      return GroundControlToMajorTom._pushToFcm(dataSource, serverKey, pushNotification.token, fcmPayload, pushNotification);
+    if (pushNotification.os === "ios")
+      return GroundControlToMajorTom._pushToApns(dataSource, apnsP8, pushNotification.token, apnsPayload, pushNotification, String((pushNotification as any).hash));
   }
 
-  protected static async _pushToApns(dataSource: DataSource, apnsP8: string, token: string, apnsPayload: object, pushNotification: components["schemas"]["PushNotificationBase"], collapseId): Promise<void> {
+  protected static async _pushToApns(
+    dataSource: DataSource,
+    apnsP8: string,
+    token: string,
+    apnsPayload: any,
+    pushNotification: components["schemas"]["PushNotificationBase"],
+    collapseId: string
+  ): Promise<void> {
     return new Promise(function (resolve) {
-      // we pass some of the notification properties as data properties to FCM payload:
       for (let dataKey of Object.keys(pushNotification)) {
         if (["token", "os", "badge", "level"].includes(dataKey)) continue;
-        apnsPayload["data"][dataKey] = pushNotification[dataKey];
+        apnsPayload["data"][dataKey] = (pushNotification as any)[dataKey];
       }
+
       const client = http2.connect("https://api.push.apple.com");
       client.on("error", (err) => console.error(err));
+
       const headers = {
         ":method": "POST",
         "apns-topic": process.env.APNS_TOPIC,
@@ -240,24 +328,24 @@ export class GroundControlToMajorTom {
         ":path": "/3/device/" + token,
         authorization: `bearer ${apnsP8}`,
       };
+
       const request = client.request(headers);
 
-      let responseJson = {};
-      request.on("response", (headers, flags) => {
+      let responseJson: any = {};
+      request.on("response", (headers) => {
         for (const name in headers) {
-          responseJson[name] = headers[name];
+          responseJson[name] = (headers as any)[name];
         }
       });
+
       request.on("error", (err) => {
         console.error("Apple push error:", err);
 
-        const responseJson = {};
         responseJson["error"] = err;
         client.close();
 
-        const PushLogRepository = dataSource.getRepository(PushLog);
-        PushLogRepository.save({
-          token: token,
+        dataSource.getRepository(PushLog).save({
+          token,
           os: "ios",
           payload: JSON.stringify(apnsPayload),
           response: JSON.stringify(responseJson),
@@ -273,19 +361,19 @@ export class GroundControlToMajorTom {
       request.on("data", (chunk) => {
         data += chunk;
       });
+
       request.write(JSON.stringify(apnsPayload));
+
       request.on("end", () => {
-        if (Object.keys(responseJson).length === 0) {
-          return;
-        }
+        if (Object.keys(responseJson).length === 0) return;
+
         responseJson["data"] = data;
         client.close();
 
         GroundControlToMajorTom.processApnsResponse(dataSource, responseJson, token);
 
-        const PushLogRepository = dataSource.getRepository(PushLog);
-        PushLogRepository.save({
-          token: token,
+        dataSource.getRepository(PushLog).save({
+          token,
           os: "ios",
           payload: JSON.stringify(apnsPayload),
           response: JSON.stringify(responseJson),
@@ -294,43 +382,50 @@ export class GroundControlToMajorTom {
 
         resolve();
       });
+
       request.end();
     });
   }
 
-  protected static async _pushToFcm(dataSource: DataSource, bearer: string, token: string, fcmPayload: object, pushNotification: components["schemas"]["PushNotificationBase"]): Promise<void> {
-    fcmPayload["message"]["token"] = token;
+  protected static async _pushToFcm(
+    dataSource: DataSource,
+    bearer: string,
+    token: string,
+    fcmPayload: any,
+    pushNotification: components["schemas"]["PushNotificationBase"]
+  ): Promise<void> {
+    fcmPayload.message.token = token;
 
-    // now, we pass some of the notification properties as data properties to FCM payload:
     for (let dataKey of Object.keys(pushNotification)) {
       if (["token", "os", "badge"].includes(dataKey)) continue;
-      fcmPayload["message"]["data"][dataKey] = String(pushNotification[dataKey]);
+      fcmPayload.message.data[dataKey] = String((pushNotification as any)[dataKey]);
     }
 
-    // @ts-ignore
-    const rawResponse = await fetch(`https://fcm.googleapis.com/v1/projects/${process.env.GOOGLE_PROJECT_ID}/messages:send`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${bearer}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(Object.assign({}, fcmPayload)),
-    });
+    const rawResponse = await fetch(
+      `https://fcm.googleapis.com/v1/projects/${process.env.GOOGLE_PROJECT_ID}/messages:send`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${bearer}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(Object.assign({}, fcmPayload)),
+      }
+    );
 
-    let responseText: string;
+    let responseText = "";
     try {
       responseText = await rawResponse.text();
     } catch (error) {
       console.error("error getting response from FCM", error);
     }
 
-    delete fcmPayload["message"]["token"]; // compacting a bit, we dont need token in payload as well
+    delete fcmPayload.message.token;
 
     const success = GroundControlToMajorTom.processFcmResponse(dataSource, responseText, token);
 
-    const PushLogRepository = dataSource.getRepository(PushLog);
-    await PushLogRepository.save({
-      token: token,
+    await dataSource.getRepository(PushLog).save({
+      token,
       os: "android",
       payload: JSON.stringify(fcmPayload),
       response: responseText,
@@ -355,7 +450,6 @@ export class GroundControlToMajorTom {
           return false;
         }
 
-        // additonal check for the same thing, just for any case
         if (Array.isArray(response?.error?.details)) {
           for (const detail of response.error.details) {
             if (detail.errorCode === "UNREGISTERED") {
@@ -366,10 +460,7 @@ export class GroundControlToMajorTom {
         }
       }
 
-      if (response?.name) {
-        // thats a sign that payload is accepted and might be delivered
-        return true;
-      }
+      if (response?.name) return true;
     } catch (_) {
       console.error("error parsing FCM response", responseText);
       return false;
@@ -378,12 +469,13 @@ export class GroundControlToMajorTom {
     return false;
   }
 
-  static processApnsResponse(dataSource: DataSource, response, token: string) {
+  static processApnsResponse(dataSource: DataSource, response: any, token: string) {
     if (response && response.data) {
       try {
-        console.log("parsing", response.data);
         const data = JSON.parse(response.data);
-        if (data && data.reason && ["Unregistered", "BadDeviceToken", "DeviceTokenNotForTopic"].includes(data.reason)) return GroundControlToMajorTom.killDeadToken(dataSource, token);
+        if (data?.reason && ["Unregistered", "BadDeviceToken", "DeviceTokenNotForTopic"].includes(data.reason)) {
+          return GroundControlToMajorTom.killDeadToken(dataSource, token);
+        }
       } catch (_) {}
     }
   }
