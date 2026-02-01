@@ -7,12 +7,15 @@ if [[ -z "$MODE" ]]; then
   exit 1
 fi
 
+# Read BITCOIN_RPC from .env (supports '=' in passwords)
 BITCOIN_RPC="$(grep '^BITCOIN_RPC=' .env | cut -d= -f2-)"
 if [[ -z "$BITCOIN_RPC" ]]; then
   echo "BITCOIN_RPC not found in .env"
   exit 1
 fi
+export BITCOIN_RPC
 
+# Extract user/pass/host/port using python (robust for special chars)
 read -r RPC_USER RPC_PASS RPC_HOST RPC_PORT < <(python3 - <<'PY'
 import os
 from urllib.parse import urlparse, unquote
@@ -32,9 +35,11 @@ else
 fi
 
 echo "Setting LAST_PROCESSED_BLOCK = $TARGET"
+
 mysql -u gc -p groundcontrol -e "
 INSERT INTO key_value (\`key\`, \`value\`)
 VALUES ('LAST_PROCESSED_BLOCK', '$TARGET')
 ON DUPLICATE KEY UPDATE \`value\`=VALUES(\`value\`);
 "
+
 echo "Done."
