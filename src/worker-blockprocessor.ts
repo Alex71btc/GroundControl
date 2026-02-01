@@ -7,8 +7,8 @@ import { TokenToTxid } from "./entity/TokenToTxid";
 import dataSource from "./data-source";
 import { components } from "./openapi/api";
 require("dotenv").config();
-const url = require("url");
 
+const { URL } = require("url");
 if (!process.env.BITCOIN_RPC) {
   console.error("not all env variables set");
   process.exit();
@@ -25,8 +25,18 @@ process
   });
 
 let jayson = require("jayson/promise");
-let rpc = url.parse(process.env.BITCOIN_RPC);
-let client = jayson.client.http(rpc);
+
+const rpcUrl = new URL(process.env.BITCOIN_RPC);
+
+const client = jayson.client.http({
+  host: rpcUrl.hostname,
+  port: rpcUrl.port ? Number(rpcUrl.port) : 8332,
+  path: rpcUrl.pathname && rpcUrl.pathname !== "" ? rpcUrl.pathname : "/",
+  // Basic auth for bitcoind RPC:
+  auth: rpcUrl.username ? `${decodeURIComponent(rpcUrl.username)}:${decodeURIComponent(rpcUrl.password || "")}` : undefined,
+  // protocol is optional for jayson; include to be explicit:
+  protocol: rpcUrl.protocol, // "http:" or "https:"
+});
 
 const LAST_PROCESSED_BLOCK = "LAST_PROCESSED_BLOCK";
 
