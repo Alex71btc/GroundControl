@@ -26,6 +26,23 @@ It is designed to be used together with a forked BlueWallet Android app.
 👉 https://github.com/Alex71btc/bluewallet-gc
 
 ---
+### GroundControl Server & Documentation
+
+The repository contains full documentation on how to build, configure and run
+your own GroundControl instance, including:
+
+- Installation & build instructions
+- Environment variables
+- Database setup
+- Firebase service account (server-side FCM)
+- Push notification flow
+- Token lifecycle & cleanup
+
+📖 **Start here:**  
+https://github.com/Alex71btc/GroundControl/tree/master/docs
+
+The documentation is intentionally kept in the server repository to clearly
+separate **app-side** and **server-side** responsibilities.
 
 ## Quick Start
 
