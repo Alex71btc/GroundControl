@@ -1,3 +1,39 @@
+# GroundControl – Self-Hosted Fork
+
+This is a fork of **BlueWallet GroundControl** focused on
+**full self-hosting, privacy and independence from upstream infrastructure**.
+
+It is designed to be used together with a forked BlueWallet Android app.
+
+---
+
+## Features
+
+- Self-hosted push notifications (Firebase FCM)
+- No dependency on BlueWallet backend
+- Separate push notifications for:
+  - unconfirmed transaction
+  - address paid
+  - transaction confirmed
+- Automatic cleanup of invalid / uninstalled push tokens
+- Works with custom Bitcoin Core / Electrum backends
+
+---
+
+## Related Project
+
+**Android App (BlueWallet fork):**  
+👉 https://github.com/Alex71btc/bluewallet-gc
+
+---
+
+## Quick Start
+
+```bash
+git clone https://github.com/Alex71btc/GroundControl.git
+cd GroundControl
+npm install
+cp .env.example .env
 # Ground Control
 
 `````````````````````````````````````````````````````````````````
