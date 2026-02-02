@@ -83,7 +83,7 @@ export class GroundControlToMajorTom {
         token: "",
         data: {
           badge: String(pushNotification.badge),
-          tag: pushNotification.txid,
+          tag: `unconfirmed:${pushNotification.txid}`,
         },
         notification: {
           title: "New unconfirmed transaction",
@@ -92,7 +92,7 @@ export class GroundControlToMajorTom {
         android: {
           notification: {
             // collapse unconfirmed updates for same txid
-          tag: pushNotification.txid,
+           tag: `unconfirmed:${pushNotification.txid}`,
           },
         },
       },
@@ -132,7 +132,7 @@ export class GroundControlToMajorTom {
         token: "",
         data: {
           badge: String(pushNotification.badge),
-          tag: pushNotification.txid,
+          tag: `confirmed:${pushNotification.txid}`,
         },
         notification: {
           title: "Transaction - Confirmed",
@@ -140,7 +140,7 @@ export class GroundControlToMajorTom {
         },
         android: {
           notification: {
-            tag: pushNotification.txid,
+          tag: `confirmed:${pushNotification.txid}`,
           },
         },
       },
@@ -219,7 +219,7 @@ export class GroundControlToMajorTom {
         token: "",
         data: {
           badge: String(pushNotification.badge),
-          tag: pushNotification.txid,
+          tag: `paid:${pushNotification.txid}`,
         },
         notification: {
           title: "+" + pushNotification.sat + " sats",
@@ -227,7 +227,7 @@ export class GroundControlToMajorTom {
         },
         android: {
           notification: {
-            tag: pushNotification.txid,
+          tag: `paid:${pushNotification.txid}`,
           },
         },
       },
